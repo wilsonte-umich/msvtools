@@ -1,0 +1,44 @@
+
+VAMP started:  12/29/2011 at 8:40:41
+
+executing VAMP command:
+  prepareReadsSplit SI_3562
+
+with parameters:
+  affyArray MOUSEDIVm520650.na31
+  affyDefPath /home/wilsonte/mdg/def
+  affyRef B3_SNP10_198
+  binSize 500
+  bwaPath /home/GROUPS/wilsontelab/bin/bwa-0.5.9/
+  dbLogin wilsontelab/mynwrfstr0rcledb@hella
+  dupBinSize 3
+  etestPath /home/GROUPS/wilsontelab/bin/etest/
+  expandEnds 1
+  inputPath /home/GROUPS/wilsontelab/data/Elenitoba
+  isCircles 1
+  logPath /home/GROUPS/wilsontelab/data/Elenitoba/logs
+  longWord 11111110111111
+  mapChunk 1E6
+  mapType bowtie
+  maxDisc 3
+  maxHits 10
+  maxNeighborDistance 20000
+  minHomoF 0.93
+  minRealF 0.3
+  nProbes 5,10,20,50
+  nStdDevs 4,5
+  noQueue 1
+  outlierAlpha 0.01
+  passPath /home/GROUPS/wilsontelab/bin/pass/
+  qType sunGrid
+  readLength 36
+  readType fasta
+  refSeq hg19
+  refSeqBase hg19
+  refSeqPath /home/GROUPS/wilsontelab/refSeqs
+  shortWord 7
+  skipInsertions 1
+  vampPath /home/GROUPS/wilsontelab/vamp
+
+applying read restrictions to fasta reads...
+  /home/GROUPS/wilsontelab/data/Elenitoba/SI_3562/1/SI_3562_1.fa...

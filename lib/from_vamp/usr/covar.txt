@@ -1,0 +1,8 @@
+vampPath /home/wilsonte/vamp
+dbLogin wilsontelab/vamp4pointohlive@dcc2
+
+noQueue
+
+#run covariance
+run pearsons
+

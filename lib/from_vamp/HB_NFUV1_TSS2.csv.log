@@ -1,0 +1,62 @@
+
+SQL*Loader: Release 11.1.0.6.0 - Production on Tue Nov 8 22:53:24 2011
+
+Copyright (c) 1982, 2007, Oracle.  All rights reserved.
+
+Control File:   HB_NFUV1_TSS2.csv.ctl
+Data File:      HB_NFUV1_TSS2.csv
+  Bad File:     HB_NFUV1_TSS2.csv.bad
+  Discard File:  none specified
+ 
+ (Allow all discards)
+
+Number to load: ALL
+Number to skip: 0
+Errors allowed: 10000
+Continuation:    none specified
+Path used:      Direct
+Silent options: FEEDBACK, ERRORS and DISCARDS
+
+Load is UNRECOVERABLE; invalidation redo is produced.
+
+Table HB_NFUV1_TSS2, loaded from every logical record.
+Insert option in effect for this table: APPEND
+
+   Column Name                  Position   Len  Term Encl Datatype
+------------------------------ ---------- ----- ---- ---- ---------------------
+HBID                                FIRST     *   ,       CHARACTER            
+CHROMOSOME                           NEXT     *   ,       CHARACTER            
+START_                               NEXT     *   ,       CHARACTER            
+END_                                 NEXT     *   ,       CHARACTER            
+BINSIZE                              NEXT     *   ,       CHARACTER            
+NBINS                                NEXT     *   ,       CHARACTER            
+THRESHOLD                            NEXT     *   ,       CHARACTER            
+NORMALIZEDDENSITY                    NEXT     *   ,       CHARACTER            
+PVALUE                               NEXT     *   ,       CHARACTER            
+FRACUV                               NEXT     *   ,       CHARACTER            
+INGENE                               NEXT     *   ,       CHARACTER            
+
+
+Table HB_NFUV1_TSS2:
+  177 Rows successfully loaded.
+  0 Rows not loaded due to data errors.
+  0 Rows not loaded because all WHEN clauses were failed.
+  0 Rows not loaded because all fields were null.
+
+Bind array size not used in direct path.
+Column array  rows :    5000
+Stream buffer bytes:  256000
+Read   buffer bytes: 1048576
+
+Total logical records skipped:          0
+Total logical records read:           177
+Total logical records rejected:         0
+Total logical records discarded:        0
+Total stream buffers loaded by SQL*Loader main thread:        1
+Total stream buffers loaded by SQL*Loader load thread:        0
+
+Run began on Tue Nov 08 22:53:24 2011
+Run ended on Tue Nov 08 22:53:24 2011
+
+Elapsed time was:     00:00:00.14
+CPU time was:         00:00:00.02

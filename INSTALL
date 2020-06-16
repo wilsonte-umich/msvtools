@@ -1,0 +1,41 @@
+
+--------------------------------------------------------------------------------
+ANALYSIS PHASE
+--------------------------------------------------------------------------------
+
+From the directory containing this INSTALL file:
+
+    $ perl configure.pl
+
+    configuring msvtools, version 0.0.1
+    checking prerequisites ......
+    generating msvtools program target
+    done
+    created msvtools program target:
+      /path/to/msvtools-0.0.1/msvtools
+
+Perform a quick check for appropriate installation by calling msvtools with
+no commands or options:
+ 
+    $ ./msvtools
+
+    msvtools version 0.0.1
+    applications for exploring microarray data for structural variants
+    usage:	msvtools <command> [options ...]
+    use 'msvtools --help' or 'msvtools <command> --help' for extended help
+
+In most cases you will want to add ‘/path/to/msvtools-<#.#.#>’ to  
+your system PATH variable so that it is available to you from any directory 
+by simply typing msvtools.  
+
+Familiarize yourself with msvtools as follows:
+
+    $ msvtools --help
+    $ cat README
+    
+
+--------------------------------------------------------------------------------
+VISUALIZATION PHASE
+--------------------------------------------------------------------------------
+
+pending...

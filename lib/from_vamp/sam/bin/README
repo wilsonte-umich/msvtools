@@ -1,0 +1,5 @@
+
+folder vamp/bin/sam/bin contains Perl scripts
+that handle output from samtools view
+i.e. into which samtools is streamed
+they are thus called only indirectly by vamp
