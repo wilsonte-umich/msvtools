@@ -6,5 +6,5 @@ Run the following script to install the required packages:
 
 ```sh
 cd msvtools
-Rscript install-r-package.R
+Rscript install-r-packages.R
 ```

@@ -16,7 +16,7 @@ From the directory containing this INSTALL file:
 
 Then, if you will train cell line models using the 'bam' method, run:
 
-    $ Rscript install-r-package.R
+    $ Rscript install-r-packages.R
 
 Perform a quick check for appropriate installation by calling msvtools with
 no commands or options:
