@@ -23,19 +23,24 @@ Command line tools run under a Linux or compatible environment.
 REQUIREMENTS
 --------------------------------------------------------------------------------
 
-Analysis Phase
+### Analysis Phase
 
 System prerequisites for running msvtools in the analysis phase are:
 
 Perl:      http://www.perl.org/
 
-R:         http://www.r-project.org/
+R:         http://www.r-project.org/ (plus package mixtools for the `train` command)
+           
 
 in addition to other standard Linux system utilities. The installation 
 utility will apprise you if you are missing a prerequisite. Note that msvtools 
 cannot be run on Windows in the analysis phase.
 
-Visualization Phase
+Folder 'msvtools/q-scripts' carries q master scripts 
+for running msvtools analysis using the 
+[q-pipeline-manager](https://github.com/wilsonte-umich/q-pipeline-manager).
+
+### Visualization Phase
 
 System prerequisites for running msvtools in the visualization phase are:
 
@@ -57,11 +62,16 @@ ANALYSIS COMMAND SUMMARY
 
 msvtools encompasses a series of commands called as follows:
 
+```sh
     msvtools <command> [options]
-    
+```
+
 Use:
 
+```sh
+    msvtools -h/--help
     msvtools <command> -h/--help
+```
 
 for more information on individual commands and their options.
 

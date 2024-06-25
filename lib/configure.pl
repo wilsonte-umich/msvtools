@@ -14,9 +14,10 @@ $| = 1;
 # get the current version
 #------------------------------------------------------------------------
 my $script = abs_path($0);
-$script =~ m|(.*)/(.+)-(\d+\.\d+\.\d+)/configure.pl$| or die "fatal error: could not recover version information\n";
-my ($wilsonDir, $utility, $version) = ($1, $2, $3);
-my $scriptDir = "$wilsonDir/$utility-$version";
+$script =~ m|(.*)/(.+)/configure.pl$| or die "fatal error: could not parse script path\n";
+my ($wilsonDir, $utility) = ($1, $2, $3);
+my $scriptDir = "$wilsonDir/$utility";
+my $version = qx|cat $scriptDir/VERSION|;
 print "configuring $utility, version $version\n";
 #------------------------------------------------------------------------
 # check the license
@@ -32,6 +33,7 @@ print ".";
 $script = "$scriptDir/$utility";
 my $libDir = "$scriptDir/lib";
 -d $libDir or die "\nfatal error: missing 'lib' directory\n$getAgain\n";
+my $rLibDir = "$scriptDir/lib/R-lib";
 #------------------------------------------------------------------------
 # get path to perl
 #------------------------------------------------------------------------
@@ -83,6 +85,7 @@ our $version = '."'$version'".';
 our $perlPath = '."'$perlPath'".';
 our $scriptDir = '."'$scriptDir'".';
 our $libDir = '."'$libDir'".';
+our $rLibDir = '."'$rLibDir'".';
 our $slurp = '."'$libDir/slurp'".';
 our $glurp = '."'$libDir/glurp'".';
 $| = 1;

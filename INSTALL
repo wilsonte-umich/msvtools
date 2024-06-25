@@ -14,6 +14,10 @@ From the directory containing this INSTALL file:
     created msvtools program target:
       /path/to/msvtools-0.0.1/msvtools
 
+Then, if you will train cell line models using the 'bam' method, run:
+
+    $ Rscript install-r-package.R
+
 Perform a quick check for appropriate installation by calling msvtools with
 no commands or options:
  

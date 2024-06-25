@@ -1,6 +1,7 @@
 
 # get passed arguments
 LIB_DIR     <- Sys.getenv('LIB_DIR')
+R_LIB_DIR   <- Sys.getenv('R_LIB_DIR')
 MODEL_NAME  <- Sys.getenv('MODEL_NAME')
 DATAFILE    <- Sys.getenv('DATAFILE')
 MEAN_1      <- as.numeric(Sys.getenv('MEAN_1'))
@@ -27,7 +28,7 @@ pch       <- "." #20
 cex       <- 1 #0.3
 
 # load dependencies
-library('mixtools', lib.loc=LIB_DIR)
+library('mixtools', lib.loc=R_LIB_DIR)
 
 # load data
 message('loading data')

@@ -2,7 +2,7 @@ use strict;
 use warnings;
 
 # define variables
-use vars qw($version $utility $error $libDir
+use vars qw($version $utility $error $libDir $rLibDir
             $TRUE $FALSE);
 our ($method, $tmpDir, $maxMem,
      $binSize, $maxTLen, $minQual, $reference, $maxCN,
@@ -24,15 +24,15 @@ my ($binWidth, $minBinCount, $maxBinCount, $maxBinI);
 sub setOptions_train {
     setOptionValue(\$method,     'method');
     setOptionValue(\$tmpDir,     'tmp-dir',         '/tmp');
-    setOptionValue(\$maxMem,     'max-mem',         1000000000);    
+    setOptionValue(\$maxMem,     'max-mem',         1000000000);
     #-------------------------------------
     setOptionValue(\$binSize,    'bin-size',        5000);
     setOptionValue(\$maxTLen,    'max-TLen',        1000);
-    setOptionValue(\$minQual,    'min-qual',        5);    
+    setOptionValue(\$minQual,    'min-qual',        5);
     setOptionValue(\$reference,  'reference');
-    setOptionValue(\$maxCN,      'max-copy-number', 4);       
+    setOptionValue(\$maxCN,      'max-copy-number', 4);
     #-------------------------------------
-    setOptionValue(\$chroms,     'chromosomes');       
+    setOptionValue(\$chroms,     'chromosomes');
     #-------------------------------------
     setOptionValue(\$outputDir,  'output-dir');
     setOptionValue(\$modelName,  'model-name');
@@ -69,9 +69,14 @@ sub msvtools_train {
     # train the model based on bam counts
     if($method eq 'bam'){
         $cntFile = getOutFile('bin_counts', $modelName, 'gz');
-        openOutputStream($cntFile, \$cntH, $TRUE);
-        getBinCoverage_train();        
-        closeHandles($cntH);
+        if($ENV{FORCE_MSVTOOLS} or ! -f $cntFile){
+            openOutputStream($cntFile, \$cntH, $TRUE);
+            getBinCoverage_train();
+            closeHandles($cntH);
+        } else {
+            print STDERR "found and using bin count file $cntFile\n".
+                         "set environment variable FORCE_MSVTOOLS to recreate it"
+        }
         $refMean  = mean (@refCounts);
         $refStdev = stdev(@refCounts);
         #$refMean  = 221.148738243302;
@@ -159,6 +164,7 @@ sub commitBin {
 sub solveCopyNumberHMM {
     my ($mean1, $stdev1) = adjustSizeStats(1);
     $ENV{LIB_DIR}     = $libDir;
+    $ENV{R_LIB_DIR}   = $rLibDir;
     $ENV{MODEL_NAME}  = $modelName;
     $ENV{DATAFILE}    = $cntFile;
     $ENV{MEAN_1}      = $mean1;

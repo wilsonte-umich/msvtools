@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Plots</title>
+        <link rel=\"icon\" href=\"/common/images/MIBrowser.ico\" sizes=\"16x16\">
+        <meta name="description" content="msvtools" />
+        <meta name="author" content="Thomas E. Wilson" />
+        <meta name="copyright" content="2018© Thomas E. Wilson, University of Michigan" />
+        <meta http-equiv="content-type" content="text/html;charset=UTF-8" />
+        <style>
+            __ASSEMBLE_CSS__
+        </style>
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.11.1/jquery.min.js"></script>
+        <script>
+            __ASSEMBLE_JS__
+        </script>   
+    </head>
+    <body>
+        <ul id="sample-list">
+            __SAMPLE_LIST__
+        </ul>
+        <div id="image-panes">
+            <div id="selector-buttons">
+                <button id="prev-sample" data-inc="-1">Prev</button>
+                <button id="next-sample" data-inc="1">Next</button>
+            </div>
+            <div id="current-sample"></div>
+            <img src="" id="correlation-plot">
+            <img src="" id="cn-change-plot">
+            <img src="" id="lrr-plot">            
+        </div>
+    </body>
+</html>

@@ -127,7 +127,8 @@ sub reportOptionHelp {
             $type and $option .= " $type";
             $required and $help = "**REQUIRED** $help";
             $header and print "\n$header\n";
-            print "    $option".(" " x ($optionTabLength - length($option)))."$help\n";
+            my $nSpaces = $optionTabLength - length($option);
+            print "    $option".(" " x ($nSpaces < 0 ? 0 : $nSpaces))."$help\n";
         }
     } else {
         print "    none\n";
