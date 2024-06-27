@@ -7,9 +7,16 @@
 
 #$    -N  refine_$EXPERIMENT\_$CELL_CLONE
 #$    -wd $EXP_MODELS_DIR
-#$    -l  vf=8G
-
+#$    -l  vf=24G
 #$    -q  wilsonte_lab.q,all.q
+
+#SBATCH --job-name=refine_$EXPERIMENT\_$CELL_CLONE
+#SBATCH --chdir=$EXP_MODELS_DIR
+#SBATCH --cpus-per-task=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --mem-per-cpu=24G 
+#SBATCH --time=24:00:00
+#SBATCH --account=$SLURM_ACCOUNT
 
 echo "refining copy number model using array data"
 echo "EXPERIMENT = $EXPERIMENT"

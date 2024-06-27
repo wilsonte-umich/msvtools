@@ -79,12 +79,6 @@ for more information on individual commands and their options.
 INPUT DATA
 --------------------------------------------------------------------------------
 
-
-
-
---------------------------------------------------------------------------------
-USAGE EXAMPLES
---------------------------------------------------------------------------------
-
-
-
+At present, msvtools is only well tested on Illumina Bead Array data. It is expected
+that you have folder(s) with the standard folder structure ultimately containing
+FinalReport files for the run(s) and DNAReport files for the samples.

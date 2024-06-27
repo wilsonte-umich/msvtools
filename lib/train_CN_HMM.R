@@ -131,7 +131,7 @@ for (chrom in chroms){
     message(paste("  ", chrom))
     dd <- d[d$CHROM==chrom,]
     write(do.call(paste, c(dd[,CN_lbls], sep=",")), file=EPROB_FILE, ncolumns=1)
-    pipe=paste("cat ", EPROB_FILE, " | segment -z 0.1 -p 0.995", sep="")   # run Viterbi
+    pipe=paste("cat ", EPROB_FILE, " | ", LIB_DIR, "/segment -z 0.1 -p 0.995", sep="")   # run Viterbi
     cni <- read.table(pipe(pipe), header=FALSE, sep="\t")[,1] + 1        # get output state calls
     dd$CN <- CNs[cni]                                                    # simplify to copy numbers                                       
     d2 <- rbind(d2, dd)                                                  # assemble the updated table

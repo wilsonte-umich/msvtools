@@ -9,6 +9,7 @@
 #$    -q  wilsonte_lab.q
 
 #SBATCH --job-name=train_$CELL_LINE
+#SBATCH --chdir=$MODELS_DIR
 #SBATCH --cpus-per-task=1
 #SBATCH --ntasks-per-node=1
 #SBATCH --mem-per-cpu=8G 
@@ -18,10 +19,6 @@
 echo "training $CELL_LINE model using method $METHOD"
 echo $BAM_GLOB
 echo $REFERENCE
-echo
-
-# PATH=/home/wilsonte_lab/club_house/etc/garage/bin/R-3.3.1/bin/:$PATH
-which R
 echo
 
 msvtools train \

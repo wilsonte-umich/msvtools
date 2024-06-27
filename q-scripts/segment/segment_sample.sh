@@ -6,11 +6,19 @@
 
 #$    -N  segment_$EXPERIMENT\_$CELL_CLONE
 #$    -wd $EXP_SAMPLES_DIR
-#$    -l  vf=8G
+#$    -l  vf=16G
 #$    -t  1-$N_SAMPLES
-
 #$    -q  wilsonte_lab.q
 ##,all.q
+
+#SBATCH --job-name=segment_$EXPERIMENT\_$CELL_CLONE
+#SBATCH --chdir=$EXP_SAMPLES_DIR
+#SBATCH --cpus-per-task=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --mem-per-cpu=16G 
+#SBATCH --time=24:00:00
+#SBATCH --array=1-$N_SAMPLES
+#SBATCH --account=$SLURM_ACCOUNT
 
 echo "segmenting array data based on refined copy number model"
 getTaskObject SAMPLE $SAMPLES

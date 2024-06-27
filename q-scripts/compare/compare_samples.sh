@@ -5,10 +5,17 @@
 
 #$    -N  compare_$EXPERIMENT\_$CELL_CLONE
 #$    -wd $EXP_COMPARE_DIR
-#$    -l  vf=4G
-
+#$    -l  vf=12G
 #$    -q  wilsonte_lab.q
 ##,all.q
+
+#SBATCH --job-name=compare_$EXPERIMENT\_$CELL_CLONE
+#SBATCH --chdir=$EXP_COMPARE_DIR
+#SBATCH --cpus-per-task=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --mem-per-cpu=12G 
+#SBATCH --time=24:00:00
+#SBATCH --account=$SLURM_ACCOUNT
 
 echo "comparing called SVs across samples"
 echo "EXPERIMENT = $EXPERIMENT"

@@ -1,0 +1,239 @@
+#!/usr/bin/perl
+use strict;
+use warnings;
+use Cwd 'abs_path';
+
+# Variable designations in this script follow as closely as possible 
+# the description of the Viterbi algorithm from:
+#    http://www.cs.brown.edu/research/ai/dynamics/tutorial/Documents/HiddenMarkovModels.html
+#
+# 'segment' solves the Viterbi algorithm, i.e. determines the most likely sequence
+# of N states over T observations, for a provided Hidden Mardov Model that obeys
+# the following properties:
+#     state values are indexed in an integer series from 0 to (N-1)
+#     observation values are indexed in an integer series from 0 to (M-1)
+#
+# Usage:
+#     segment [-e EMISS_PROBS_FILE] [-t TRANS_PROBS_FILE] [-z ZERO_PROB] [-p PERSISTENCE] [-w]
+# where optional arguments are:
+#     -e EMISS_PROBS_FILE = file of emission probabilities, in format:
+#         P(value=0 | state=0) P(value=1 | state=0) [  ...  P(value=M-1 | state=0) ]
+#         P(value=0 | state=1) P(value=1 | state=1) [  ...  P(value=M-1 | state=1) ]
+#         ...
+#         P(value=0 | state=N-1) P(value=1 | state=N-1) [  ...  P(value=M-1 | state=N-1) ]
+#     -t TRANS_PROBS_FILE = file of transition probabilities, in format:
+#         P(state_t+1=0 | state=0) P(state_t+1=1 | state=0) [  ...  P(state_t+1=N-1 | state=0) ]
+#         P(state_t+1=0 | state=1) P(state_t+1=1 | state=1) [  ...  P(state_t+1=N-1 | state=1) ]
+#         ...
+#         P(state_t+1=0 | state=N-1) P(state_t+1=1 | state=N-1) [  ...  P(state_t+1=N-1 | state=N-1) ]
+#     -z ZERO_PROB = P(state=0), i.e. probability of being in state 0; all other states equally weighted
+#     -p PERSISTENCE = P(state_t+1 = state_t), i.e. probability of remaining in state
+#     -w boolean flag indicating whether out-of-state transitions should be weighted by ZERO_PROB, so that:
+#         -w omitted  = all out-of-state transitions are equally weighted
+#         -w included = nonZero-to-Zero transitions are preferred to a degree determined by ZERO_PROB
+#                       this is useful when rare features are expected in a generally featureless space
+# with default values:
+#     -e no file; emission probabilities are expected as a comma-delimited list in column 1 of input stream
+#     -t no file; transition probabilities are determined by the combination of -z, -p and -w
+#     -z 0.5
+#     -p 0.9   (ignored if -t is set)
+#     -w FALSE (ignored if -t is set)
+#
+# Data are input and output in a stream as follows:
+#     stdin  = <observedValue|emissionProbs> [optional sequence instance identifiers ...]
+#     stdout = inferredState [optional sequence instance identifiers ...]
+# where:
+#     observedValue is a value in observation set 0 to (M-1) (when using EMISS_PROBS_FILE)
+#     emissionProbs is a comma-delimited list of emission probabilities in format:
+#         P(instance | state=0),P(instance | state=1)[...,P(instance | state=N-1)]
+#     inferredState is a value in state set 0 to (N-1)
+#
+# Example:
+#     segment -z 0.9 -p 0.99 -w
+# executes Viterbi segmentation using:
+#     emission probabilities provided via the input data stream
+#     P(state = 0) = 0.9
+#     P(state_t+1 = state_t) = 0.99
+#     P(state_t+1 = 0 | state_t > 0) > P(state_t+1 > 0 | state_t > 0)
+# such that providing a data stream on stdin such as:
+#     0.12,0.88 chr1 1250 +
+#     0.35,0.65 chr1 1300 +
+#     ...
+# might result in a data stream on stdout such as:
+#     1 chr1 1250 +
+#     1 chr1 1300 +
+#     ...
+
+#provide help if requested
+if($ARGV[0] and $ARGV[0] eq '--help'){
+    my $scriptFile = abs_path($0);
+    print qx/head -n65 $scriptFile | tail -n60 | sed 's|^#||'/;
+    exit;
+}
+if($ARGV[0] and $ARGV[0] eq '--version'){
+    use File::Basename qw();
+    my ($name, $path, $suffix) = File::Basename::fileparse($0);
+    print qx|head -n1 $path/VERSION|;
+    exit;
+}
+
+# detect and check options
+my %validOptions = (e=>1,t=>1,z=>1,p=>1,w=>1);
+my %booleanOptions = (w=>1);
+my %options = (e=>0,t=>0,z=>0.5,p=>0.9,w=>0);
+my $option;
+while ($option = shift @ARGV){
+    ($option and $option =~ m/^\-(.)(.*)/) or last;
+    my $optionType = $1;
+    $validOptions{$optionType} or die "segment error: unrecognized option -$optionType\n";
+    my $optionValue;
+    if($booleanOptions{$optionType}){
+        $optionValue = 1;
+    } else {
+        $optionValue = $2 ? $2 : shift @ARGV;
+    }
+    defined $optionValue or die "segment error: no value found for option -$optionType\n";
+    $options{$optionType} = $optionValue;
+}
+
+# collect information on emission probabilities and states
+my $logZero = -1E100;
+my ($inline, @A, @B, @pi, @prevDelta, @phi, @segIDs, @sigma, @i_star);
+if($options{e}){
+    getProbsFromFile($options{e}, \@B);
+} else {
+    $inline = 1; 
+} 
+sub getProbsFromFile {
+    my ($file, $probArray) = @_;
+    open my $inH, "<", $file or die "segment error: could not open $file for reading: $!\n";
+    while(my $line = <$inH>){ 
+        chomp $line;
+        $line or next;
+        my @probs = split(/\s/, $line); 
+        @probs = applyLogs(@probs); #use log probability to prevent underflow
+        push @$probArray, \@probs;
+    } 
+    close $inH; 
+}
+
+# collect the bins and observations
+while(my $bin = <STDIN>){
+    $bin =~ m/^(\S+)(.*)/ or die "segment error: format error in sequence line:\n\t$bin\n";
+    my ($obs, $segID) = ($1, $2);
+    $inline and $obs = [applyLogs(split(",", $obs))];    
+    defined $segID or $segID = "";
+    push @sigma, $obs; #sequence of actual observations OR bin emission probabilities 
+    push @segIDs, $segID; #undefined list of sequence identifiers supplied by caller
+}
+
+# determined state and observation counts
+my $N = $options{e} ? @B : @{$sigma[0]};  #number of states
+$N >= 2 or die "segment error: fewer than two states provided\n"; 
+my $N_ = $N - 1; #max 0-referenced state index
+my $N__ = $N_ - 1; 
+my $T = @sigma; #length of the sequence of observations
+my $T_ = $T - 1; #max 0-referenced observation index
+
+# start probabilities derived from ZERO_PROB
+my $ZERO_PROB = $options{z};
+my $non_zero_prob = (1 - $ZERO_PROB) / $N_; # split non-zero starting probability equally among all non-zero states
+foreach my $i(0..$N_){ $pi[$i] = applyLog($i == 0 ? $ZERO_PROB : $non_zero_prob) }
+
+# transition probabilities 
+if($options{t}){  # from TRANS_PROBS_FILE
+    getProbsFromFile($options{t}, \@A);
+} else {  # from PERSISTENCE and ZERO_PROB
+    my $PERSISTENCE = $options{p};
+    my $trans_zero_nonZero = (1 - $PERSISTENCE) / $N_;
+    my $trans_nonZero_zero = (1 - $PERSISTENCE) * ($ZERO_PROB / ($ZERO_PROB + ($N__ * $non_zero_prob))); 
+    my $trans_nonZero_nonZero = 1 - $PERSISTENCE - $trans_nonZero_zero;
+    my $out_of_state = (1 - $PERSISTENCE) / $N_;
+    foreach my $i(0..$N_){
+        foreach my $j(0..$N_){
+            my $p = 0;
+            if($options{w}){
+                if($i == $j){
+                    $p = $PERSISTENCE; #probability of remaining in state
+                } elsif ($i == 0) {   
+                    $p = $trans_zero_nonZero; #probability of transitioning from zero to non-zero state
+                } elsif ($j == 0) {   
+                    $p = $trans_nonZero_zero; #probability of transitioning from non-zero to zero state  
+                } else {
+                    $p = $trans_nonZero_nonZero; #probability of transitioning from non-zero to different non-zero state
+                }       
+            } else {
+                if($i == $j){
+                    $p = $PERSISTENCE; #probability of remaining in state
+                } else {
+                    $p = $out_of_state; #probability of changing state, unweighted
+                }  
+            }
+            $A[$i][$j] = applyLog($p);
+        }
+    }  
+}
+
+
+# 1. initialization
+foreach my $i(0..$N_){ 
+    push @prevDelta, $pi[$i] + getEP($i, $sigma[0]); #probs are added since using log probs
+    push @{$phi[0]}, -9999; #placeholder, value never used  
+}
+
+# 2. recursion
+foreach my $t(1..$T_){
+    my ($o_t, @delta) = ($sigma[$t]);
+    foreach my $j(0..$N_){ 
+        my $b_j = getEP($j, $o_t);  
+        my ($max_i, $argmax_i) = $logZero;
+        foreach my $i(0..$N_){ 
+            my $delta = $prevDelta[$i] + $A[$i][$j] + $b_j;
+            $max_i < $delta and $max_i = $delta and $argmax_i = $i;
+        }
+        push @delta, $max_i;
+        push @{$phi[$t]}, $argmax_i; 
+    }
+    @prevDelta = @delta;
+}
+
+# 3. termination
+my ($max_i, $argmax_i) = ($logZero);
+foreach my $i(0..$N_){ 
+    my $delta = $prevDelta[$i];
+    $max_i < $delta and $max_i = $delta and $argmax_i = $i;
+}
+my $p_star = $max_i;
+print STDERR "Viterbi path log probability = $p_star\n";
+unshift @i_star, $argmax_i;
+
+# 4. reconstruction
+foreach my $t(reverse(1..$T_)){
+    unshift @i_star, $phi[$t][$i_star[0]];
+}
+
+# print the results
+foreach my $t(0..$T_){
+    print "$i_star[$t]$segIDs[$t]\n";
+}
+
+sub applyLogs{ #take log of all probability values in list
+    return (map { applyLog($_) } @_);
+}
+sub applyLog{ #take log of probability value
+    my ($value) = @_;
+    if($value>0){
+        return log($value);
+    } else {
+        return $logZero; #prevent log(0) error by using impossibly large negative number
+    }
+}
+sub getEP { #recover the state to obs emission probability from EMISS_PROBS_FILE or input column 1
+    my ($state, $obs) = @_;
+    if($inline){
+        return $$obs[$state];
+    } else {
+        return $B[$state][$obs];
+    }
+}
+

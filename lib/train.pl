@@ -69,14 +69,9 @@ sub msvtools_train {
     # train the model based on bam counts
     if($method eq 'bam'){
         $cntFile = getOutFile('bin_counts', $modelName, 'gz');
-        if($ENV{FORCE_MSVTOOLS} or ! -f $cntFile){
-            openOutputStream($cntFile, \$cntH, $TRUE);
-            getBinCoverage_train();
-            closeHandles($cntH);
-        } else {
-            print STDERR "found and using bin count file $cntFile\n".
-                         "set environment variable FORCE_MSVTOOLS to recreate it"
-        }
+        openOutputStream($cntFile, \$cntH, $TRUE);
+        getBinCoverage_train();
+        closeHandles($cntH);
         $refMean  = mean (@refCounts);
         $refStdev = stdev(@refCounts);
         #$refMean  = 221.148738243302;

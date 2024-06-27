@@ -4,10 +4,16 @@
 
 #$    -N  assemble_$EXPERIMENT
 #$    -wd $EXPERIMENT_DIR
-#$    -l  vf=2G
+#$    -l  vf=16G
+#$    -q  wilsonte_lab.q,all.q
 
-#$    -q  wilsonte_lab.q
-##,all.q
+#SBATCH --job-name=assemble_$EXPERIMENT
+#SBATCH --chdir=$EXPERIMENT_DIR
+#SBATCH --cpus-per-task=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --mem-per-cpu=16G 
+#SBATCH --time=24:00:00
+#SBATCH --account=$SLURM_ACCOUNT
 
 echo "assembling jpg viewer for all samples in experiment $EXPERIMENT"
 echo
