@@ -27,14 +27,8 @@ N_FLANK_PROBES <- 10 # same as find_SVs.R
 N_END_PROBES   <- N_FLANK_PROBES * 2
 PLOT_PREFIX    <- paste(PLOT_DIR, GROUP_NAME, sep="/")
 
-# set common image properties
-width     <- 2.5
-height    <- 2.8
-units     <- 'in' # w and h in inches
-pointsize <- 8
-resol     <- 900 #dpi
-pch       <- "." #20
-cex       <- 1 #0.3
+# set plot shared properties
+source(paste(LIB_DIR, "plot_common.R", sep="/"))
 
 # load the data
 message("loading SV regions")

@@ -1,14 +1,4 @@
-
-# coordinate the zygosity and LRR fitting and modeling
-
-# set common image properties
-width     <- 2.5
-height    <- 2.8
-units     <- 'in' # w and h in inches
-pointsize <- 8
-resol     <- 900 #dpi
-pch       <- "." #20
-cex       <- 1 #0.3
+# coordinate zygosity and LRR fitting and modeling
 
 # generic function for plotting modeled probabilities without actual data
 plotModeled <- function(CN, type, bins, n_bins, modeled, xlab, xlim){
@@ -33,7 +23,7 @@ CNs <- sort(unique(d[[cn_col]])) # the available model copy numbers (NA purged b
 isSuff <- function(CN, inf_flt){
     CN %in% CNs & (
         #cn_col == 'CN_OUT' | # always plot the final model
-        nrow(d[dlrr & d[[cn_col]]==CN & inf_flt,]) >= 1e3 # includes usability filter
+        nrow(d[arrayFittable & d[[cn_col]]==CN & inf_flt]) >= 1e3 # includes usability filter
     )
 }
 
@@ -47,7 +37,7 @@ normalizeEPs <- function(eps, bad_prb_prob){
 }
 
 # declare lists to take emission probability lookup tables
-# list index=CN, value=data.frame of bins and EPs
+# list index=CN, value=data.table of bins and EPs
 zyg_eps <- list()
 frc_zyg <- list()
 lrr_eps <- list()
@@ -88,8 +78,6 @@ chooseFit <- function(dat, type, other, updt=NULL){
     dat
 }
 compareFit <- function(smp, cmp, updtSmp=NULL){
-    #print(smp$isConv) # not currently using convgergence criterion, just fit quality
-    #print(cmp$isConv) # usually prefers convergent anyway
     if(smp$error & cmp$error){ # so far, this never happens...
         stop("NLS FAILURE: error with both simple and complex models")
     } else if(smp$error){
@@ -113,7 +101,7 @@ project_mosaic <- function(low, high, bad_prb_prob){
     cdf_low  <- cumsum(low)
     cdf_high <- cumsum(high)
     inv_low  <- 1 - cdf_low
-    ep       <- pmax(0, 1 - pmax(inv_low, cdf_high)) # pmax(0) prevent tiny negative number overruns via prior math                         
+    ep       <- pmax(0, 1 - pmax(inv_low, cdf_high)) # pmax(0) prevent tiny negative number overruns via prior math
     normalizeEPs(ep/sum(ep), bad_prb_prob) 
 }
 

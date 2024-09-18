@@ -4,27 +4,39 @@ use warnings;
 # define variables
 use vars qw($version $utility $error $libDir $rLibDir
             $TRUE $FALSE);
+require "$libDir/Illumina.pl";
+require "$libDir/formats.pl";
 our ($method, $tmpDir, $maxMem,
-     $binSize, $maxTLen, $minQual, $reference, $maxCN,
+     $arrayDir, $arrayFmt, $nameCol, $arrayType, $genomeFasta,
+     $binSize, 
+     $maxTLen, $minQual, $reference, $maxCN,
      $chroms,
      $outputDir, $modelName);
+our ($inputDir);
 my @globs;
-my (%chrCN, @chroms);
+our (%chrCN, @chroms, %chroms);
 my ($refChrom, $refStart, $refEnd, $refPloidy,
     $refMean, $refStdev, @refCounts);
-my ($cntH, $mdlH, $cntFile, $mdlFile, $binFile);
+my ($cntH, $mdlH, $prbH, $cntFile, $mdlFile, $binFile);
 my $chrom;           # the chromosome being processed
 my $binE;            # last base of the first possible bin
 my $thsBinC = 0;     # coverage of the current bin
 my $nxtBinC = 0;     # coverage of next bin (for pairs that cross bin boundaries)
 my $prec = 1e-2;     # sufficient significant digits for bins
 my ($binWidth, $minBinCount, $maxBinCount, $maxBinI);
+my ($nPrbTotal, $probeBedFile) = (0);
 
 # manage options
 sub setOptions_train {
     setOptionValue(\$method,     'method');
     setOptionValue(\$tmpDir,     'tmp-dir',         '/tmp');
     setOptionValue(\$maxMem,     'max-mem',         1000000000);
+    #-------------------------------------
+    setOptionValue(\$arrayDir,   'array-dir');
+    setOptionValue(\$arrayFmt,   'array-format', 'Illumina');
+    setOptionValue(\$nameCol,    'name-column',  'DNA_ID');
+    setOptionValue(\$arrayType,  'array-type');
+    setOptionValue(\$genomeFasta,'genome-fasta');
     #-------------------------------------
     setOptionValue(\$binSize,    'bin-size',        5000);
     setOptionValue(\$maxTLen,    'max-TLen',        1000);
@@ -37,6 +49,8 @@ sub setOptions_train {
     setOptionValue(\$outputDir,  'output-dir');
     setOptionValue(\$modelName,  'model-name');
     #-------------------------------------
+    -d $arrayDir or die "$error: $arrayDir does not exist or is not a directory\n";
+    -f $genomeFasta or die "$error: genome fasta not found: $genomeFasta\n";
     -d $tmpDir or die "$error: $tmpDir does not exist or is not a directory\n";
     $maxMem =~ m|\D| and die "$error: max-mem must be an integer number of bytes\n";    
     $binSize =~ m|\D| and die "$error: bin-size must be an integer number of base pairs\n";
@@ -46,12 +60,15 @@ sub setOptions_train {
         $reference =~ m|(\w+):(\d+)-(\d+)/(\d+)| or die "malformed reference, expected format 'chrom:start-end/copy_number'\n";
         ($refChrom, $refStart, $refEnd, $refPloidy) = ($1, $2, $3, $4);
         $maxTLen < $binSize or die "$error: --max-TLen must be less than --bin-size\n";
+    } elsif($method eq 'bed6'){
+        $globs[0] or die "missing bed file as last command argument";
     } else {
         ($method eq 'M' or $method eq 'F') or die "$error: unknown method '$method', expected (bam|M|F)\n";
         $chrCN{chrX} = $method eq 'M' ? 1 : 2;
         $chrCN{chrY} = $method eq 'M' ? 1 : 0;   
     }
     @chroms = sort {$a cmp $b} split(",", $chroms);
+    %chroms = map { $_ => 1 } @chroms;    
     -d $outputDir or die "$error: directory not found: $outputDir\n";
 }
 # main execution block
@@ -59,15 +76,17 @@ sub msvtools_train {
     (@globs) = @_;
     
     # initialize
-    setOptions_train();    
+    setOptions_train();
     print STDERR "$utility train: " . getTime(), "\n";
     
-    # open outputs
+    # # open outputs
     $mdlFile = getOutFile('model', $modelName, 'bed.bgz');
     $binFile = getOutFile('bins',  $modelName, 'bed.bgz');
-    
-    # train the model based on bam counts
+    $probeBedFile = getOutFile('probes', $arrayType, 'bed.gz');
+
+    # train the bin model based on bam counts
     if($method eq 'bam'){
+        print STDERR "training model from bam reads\n";
         $cntFile = getOutFile('bin_counts', $modelName, 'gz');
         openOutputStream($cntFile, \$cntH, $TRUE);
         getBinCoverage_train();
@@ -78,9 +97,22 @@ sub msvtools_train {
         #$refStdev = 36.8249415102796;
         print STDERR "$reference avg +/- sd = $refMean +/- $refStdev\n\n";
         solveCopyNumberHMM();
+
+    # use an externally trained CN model, e.g., from svWGS
+    } elsif($method eq 'bed6'){
+        print STDERR "training model from external bed file CN assessment\n";
+        openOutputStream($mdlFile, \$mdlH, $FALSE, $FALSE, "bgzip -c");
+        openInputStream($globs[0], \my $inH, undef, undef, $globs[0] =~ m/\.gz$/);
+        while (my $line = <$inH>){
+            chomp $line;
+            my @line = split("\t", $line);
+            print $mdlH join("\t", @line[0..5]), "\n";
+        }
+        close($inH);
         
-    # train the model based simply on sex of mammalian sample
+    # train the bin model based simply on sex of mammalian sample
     } else {
+        print STDERR "training model from simple sex-based chromosome ploidy\n";
         openOutputStream($mdlFile, \$mdlH, $FALSE, $FALSE, "bgzip -c");
         foreach my $chrom(@chroms){
             my $CN = defined $chrCN{$chrom} ? $chrCN{$chrom} :  2; # autosome = CN2
@@ -89,25 +121,36 @@ sub msvtools_train {
         }  
     }
     
-    # index the model file
+    # index the bin model file
     print STDERR "$utility train: indexing model file(s)\n";
     closeHandles($mdlH);
     system("tabix -p bed $mdlFile");
-    -e $binFile and system("tabix -p bed $binFile");
+    -e $binFile and system("tabix -p bed -f $binFile");
+
+    # calculate the probe (not bin) GC content for normalization
+    print STDERR "extracting probe positions\n";
+    $inputDir = $arrayDir;
+    openOutputStream($probeBedFile, \$prbH, $TRUE, $FALSE, "sort -k1,1 -k2,2n -S 2G");
+    parseIlluminaProbes(\&writeProbeSpanBinFile);
+    closeHandles($prbH);
+    print STDERR join("\t", commify($nPrbTotal), "probes recovered from index array"), "\n";
+    print STDERR "calculating probe GC values\n";
+    my $gcFile = getOutFile('probes', $arrayType, 'gc.bed.gz');
+    system("bedtools nuc -fi $genomeFasta -bed $probeBedFile | cut -f 4,6 | gzip -c > $gcFile");
 }
 
 # calculate fixed-width bin coverage
 sub getBinCoverage_train {
     my @bamFiles;
     foreach my $glob(@globs){ push @bamFiles, glob($glob) }
-    my $bamFiles = join(" ", @bamFiles);    
+    my $bamFiles = join(" ", @bamFiles);
     
     # proceed one requested chromosome at a time
     foreach my $chrom_(@chroms){
         $chrom = $chrom_;
         $binE = $binSize;
         $thsBinC = 0;
-        $nxtBinC = 0;        
+        $nxtBinC = 0;
         print STDERR "\t", $chrom, "\n";
         
         # thread through all well-mapped pairs
@@ -180,6 +223,19 @@ sub adjustSizeStats {
             $refStdev / $refPloidy * $CN); 
 }
 
+# ues bedtools nuc to get the percent GC for DNA surrounding every probe position
+sub writeProbeSpanBinFile { 
+    my ($f, $hdr) = @_;
+    $nPrbTotal++;
+    my $start = $$f[$$hdr{POS}] - 101;
+    print $prbH join("\t", 
+        $$f[$$hdr{CHROM}],
+        $start < 0 ? 0 : $start,
+        $$f[$$hdr{POS}] + 100,
+        $$f[$$hdr{PRB_NAME}]
+    ), "\n";
+}
+
 1;
     
 #=========================================================================
@@ -225,6 +281,47 @@ sub adjustSizeStats {
 #  = 7 sequence match
 #  X 8 sequence mismatch
 #=========================================================================
+
+
+# $ bedtools nuc
+
+# Tool:    bedtools nuc (aka nucBed)
+# Version: v2.30.0
+# Summary: Profiles the nucleotide content of intervals in a fasta file.
+
+# Usage:   bedtools nuc [OPTIONS] -fi <fasta> -bed <bed/gff/vcf>
+
+# Options: 
+#         -fi     Input FASTA file
+
+#         -bed    BED/GFF/VCF file of ranges to extract from -fi
+
+#         -s      Profile the sequence according to strand.
+
+#         -seq    Print the extracted sequence
+
+#         -pattern        Report the number of times a user-defined sequence
+#                         is observed (case-sensitive).
+
+#         -C      Ignore case when matching -pattern. By defaulty, case matters.
+
+#         -fullHeader     Use full fasta header.
+#                 - By default, only the word before the first space or tab is used.
+
+# Output format: 
+#         The following information will be reported after each BED entry:
+#             1) %AT content
+#             2) %GC content
+#             3) Number of As observed
+#             4) Number of Cs observed
+#             5) Number of Gs observed
+#             6) Number of Ts observed
+#             7) Number of Ns observed
+#             8) Number of other bases observed
+#             9) The length of the explored sequence/interval.
+#             10) The seq. extracted from the FASTA file. (opt., if -seq is used)
+#             11) The number of times a user's pattern was observed.
+#                 (opt., if -pattern is used.)
 
 
 # initialize the copy number HMM for genome based on reference region

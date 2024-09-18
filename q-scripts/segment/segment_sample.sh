@@ -3,6 +3,7 @@
 #q    require $EXPERIMENT $CELL_LINE $CELL_CLONE $SAMPLES $N_SAMPLES
 #q    require $CORE_PRJT_DIR $CORE_PRJT $ARRAY_FORMAT $NAME_COLUMN
 #q    require $EXP_MODELS_DIR $EXP_SAMPLES_DIR
+#q    require $TRANSITION_PROB
 
 #$    -N  segment_$EXPERIMENT\_$CELL_CLONE
 #$    -wd $EXP_SAMPLES_DIR
@@ -36,7 +37,7 @@ msvtools segment \
 -N $NAME_COLUMN \
 -s $SAMPLE \
 --bad-probe-freq  2e-3 \
---transition-prob 1e-5 \
+--transition-prob $TRANSITION_PROB \
 --preservation    '0.98,0.90,0.5,0.1' \
 -o $EXP_SAMPLES_DIR
 checkPipe

@@ -1,4 +1,3 @@
-
 #===============================================================================
 # HMM model description
 #-------------------------------------------------------------------------------
@@ -14,7 +13,7 @@
 
 # EXAMPLE: predict the weather based on what people walking through a door are wearing
 #   ot = observation types: all combinations of list(age=c('adult','child'),      observer=c('Tom','Kim'))
-#   os = observed states:   all combinations of list(foowear=c('shoes','sandals'),hat=c('yes','no'))
+#   os = observed states:   all combinations of list(footwear=c('shoes','sandals'),hat=c('yes','no'))
 #   hs = hidden states:     all combinations of list(temp=c('hot','cold'),        sky=c('sunny','cloudy'))
 # where:
 #     emission probabalities change based on who is doing the wearing AND the observing
@@ -26,10 +25,14 @@
 #     in a different implementation, age might also vary with the weather
 #        e.g. perhaps adults don't appear as often when it is hot (thus, age = obs type AND state)
 
+# modification Sep. 2024
+# change os/observation state to depend on each candidate hidden state
+# for arrays, this allows a hidden-state-specific GC bias correction to be appled to LRR values
+# i.e., os is a function of LRR_RAW - gcCorr[hs]
+
 # variable designations tend to follow:
 #    http://www.cs.brown.edu/research/ai/dynamics/tutorial/Documents/HiddenMarkovModels.html
 #===============================================================================
-
 
 #===============================================================================
 # REQUIRED: HMM model initialization
@@ -44,7 +47,7 @@ HMM_combine_model <- function(l) {
                   values=expand.grid(l, stringsAsFactors=FALSE))
     cmb$N <- nrow(cmb$values)
     cmb$i <- 1:cmb$N     
-    names(cmb$i) <- apply(as.data.frame(lapply(cmb$values, as.character)), 1, paste0, collapse=",") 
+    names(cmb$i) <- apply(as.data.table(lapply(cmb$values, as.character)), 1, paste0, collapse=",") 
     cmb
 }
 HMM_init <- function(ot, os, hs, p=NULL){
@@ -60,7 +63,6 @@ HMM_init <- function(ot, os, hs, p=NULL){
     HMM # return HMM object
 }
 #===============================================================================
-
 
 #===============================================================================
 # OPTIONAL: HMM model construction, special use cases
@@ -116,12 +118,11 @@ HMM_set_median_prob <- function(HMM){ # used to estimate expected likelihoods
 }
 #===============================================================================
 
-
 #===============================================================================
 # OPTIONAL: construct observation types and states from paired observation properties
 #    HMM             = model created with HMM_init
-#    ot = obs_types  = list or data.frame with same value types and order as provided to HMM_init
-#    os = obs_states = list or data.frame with same value types and order as provided to HMM_init
+#    ot = obs_types  = list or data.table with same value types and order as provided to HMM_init
+#    os = obs_states = list or data.table with same value types and order as provided to HMM_init
 #-------------------------------------------------------------------------------
 HMM_collapse_obs <- function(HMM, ot, os){
     env <- environment()
@@ -139,24 +140,26 @@ HMM_collapse_obs <- function(HMM, ot, os){
                 if(length(env[[type]][[i]]) != n_obs){
                     stop(paste("different numbers of observations provided for", type))
                 }
-            }            
+            }
         }
+        # if(type){
+
+        # }
         obs[[type]] <- HMM[[type]]$i[ if(HMM[[type]]$n_cat == 1){
             as.character(env[[type]][[1]])
         } else {
-            apply(as.data.frame(lapply(env[[type]], as.character)), 1, paste0, collapse=",")
+            apply(as.data.table(lapply(env[[type]], as.character)), 1, paste0, collapse=",")
         } ]
     }   
     obs # return the observation type and state indices
 }
 #===============================================================================
 
-
 #===============================================================================
 # HMM algorithm execution
 # inputs:
 #    HMM  = model created with HMM_init and subsequently filled with probabilities
-#    obs  = list or data.frame with ot and os columns, filled with observation indices
+#    obs  = list or data.table with ot and os columns, filled with observation indices
 #           as created by HMM_convert_obs, but can also be constructed by caller
 #    path = proposed set of hidden state indices for a series of observations
 #-------------------------------------------------------------------------------
@@ -179,7 +182,7 @@ HMM_viterbi <- function(HMM, obs){
     # 1. initialization (observation t=1)
     HMM_init_algorithm(HMM, environment())
     delta     <- log(matrix(0,  nrow=T, ncol=HMM$hs$N))
-    delta[1,] <- sapply(is, function(i) HMM$sp[i] + HMM$ep[obs$ot[[1]],i,obs$os[[1]]])    
+    delta[1,] <- sapply(is, function(i) HMM$sp[i] + HMM$ep[obs$ot[[1]],i,obs$os[[1]]])
     phi       <-     matrix(NA, nrow=T, ncol=HMM$hs$N)
     
     # 2. recursion;
@@ -189,7 +192,10 @@ HMM_viterbi <- function(HMM, obs){
         ot_t  <- obs$ot[[t]]
         os_t  <- obs$os[[t]]
         for (j in is){     # j = this hs
-            ep_j <- HMM$ep[ot_t,j,os_t]
+
+            # ep_j <- HMM$ep[ot_t,j,os_t]
+            ep_j <- HMM$ep[ot_t,j,os_t[[j]]] # adjust the observed state LRR based on the GC correction of the hidden (output) state
+
             for (i in is){ # i = prev hs
                 delta_ <- delta[pt,i] + HMM$tp[i,j] + ep_j
                 if(delta[t,j] < delta_){
@@ -256,80 +262,3 @@ HMM_likelihood_exp <- function(HMM, obs, hs_in, hs){
     }))
 }
 #===============================================================================
-
-
-
-##-------------------------------------------------------------------------------
-## forward-backward algorithm => likelihood over model
-##-------------------------------------------------------------------------------
-### use the forward-backward algorithm to find the likelihood
-### of a set of observations given a HMM, over all paths
-##HMM_forward <- function(HMM, obs){
-##
-##    # 1. initialization (observation t=1)
-##    T <- HMM_init_algorithm(HMM, environment())
-##    
-##    # 2. recursion
-##    for (t in 2:T){
-##        pt <- t - 1
-##        ot_t  <- obs$ot[[t]]
-##        os_t  <- obs$os[[t]]
-##        delta[t,] <- sapply(HMM$hs$i, function(j){ # j = this hs
-##            log(sum(exp(
-##                sapply(HMM$hs$i, function(i) delta[pt,i] + HMM$tp[i,j]) # i = prev hs; delta is often called alpha...
-##            ))) + HMM$ep[ot_t,j,os_t]
-##        })
-##    }
-##    
-##    # 3. sum to result
-##    # here and above, are summing probabilities, NOT log probabilities!
-##    log(sum(exp(delta[T,])))      
-##}
-###http://www.shokhirev.com/nikolai/abc/alg/hmm/hmm.html
-###First, the probabilities for the single-symbol sequence are calculated as a
-###product of initial i-th state probability and emission probability of the given
-###symbol o(1) in the i-th state.
-###To calculate alpha_t+1(j), we multiply
-###every alpha_t(i) by the corresponding transition probability from the i-th state to
-###the j-th state, sum the products over all states, and then multiply the result
-###by the emission probability of the symbol o(t+1).
-###Iterating the process, we can
-###eventually calculate alpha_T(i), and then summing them over all states, we can obtain
-###the required probability.
-#
-#
-#HMM_likelihood_model <- function(HMM, obs){
-#
-#    # 1. initialization (observation t=1)
-#    HMM_init_algorithm(HMM, environment())
-#    alpha     <- log(matrix(0, nrow=T, ncol=HMM$hs$N))
-#    alpha[1,] <- sapply(is, function(i) HMM$sp[i] + HMM$ep[obs$ot[[1]],i,obs$os[[1]]]) 
-#    beta      <- log(matrix(0, nrow=T, ncol=HMM$hs$N))
-#    beta[T,]  <- log(1)
-#    
-#    # major problem: forward-backward demands summing of probabilities, not log probabilities
-#    # this will essentially always underflow on long sequences
-#    # rendering this approach basically useless
-#    
-#    # 2. forward recursion
-#    for (t in 2:T){
-#        pt <- t - 1
-#        ot_t  <- obs$ot[[t]]
-#        os_t  <- obs$os[[t]]
-#        alpha[t,] <- sapply(is, function(j){ # j = this hs
-#            log(sum(exp(
-#                sapply(is, function(i) alpha[pt,i] + HMM$tp[i,j]) # i = prev hs; delta is often called alpha...
-#            ))) + HMM$ep[ot_t,j,os_t]
-#        })
-#    }
-#    
-#    # 3. backward recursion
-#    
-#    
-#    # 4. 
-#    
-#    
-#    # 3. sum to result
-#    # here and above, are summing probabilities, NOT log probabilities!
-#    log(sum(exp(delta[T,])))      
-#}

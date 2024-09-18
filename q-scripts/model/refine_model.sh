@@ -2,8 +2,9 @@
 
 #q    require $EXPERIMENT $CELL_LINE $CELL_CLONE $SAMPLES
 #q    require $MODELS_DIR
-#q    require $CORE_PRJT_DIR $CORE_PRJT $ARRAY_FORMAT $NAME_COLUMN
+#q    require $CORE_PRJT_DIR $CORE_PRJT $ARRAY_FORMAT $NAME_COLUMN $ARRAY_TYPE
 #q    require $CHROMS $EXP_MODELS_DIR
+#q    require $TRANSITION_PROB
 
 #$    -N  refine_$EXPERIMENT\_$CELL_CLONE
 #$    -wd $EXP_MODELS_DIR
@@ -33,15 +34,17 @@ echo "refinement round 1"
 echo "----------------------------------------------------"
 msvtools refine \
 -D $MODELS_DIR \
--t $CELL_LINE \
+--train-name $CELL_LINE \
 -a $CORE_PRJT_DIR \
 -p $CORE_PRJT \
 -F $ARRAY_FORMAT \
 -N $NAME_COLUMN \
+-A $ARRAY_TYPE \
 -s $SAMPLES \
 -C $CHROMS \
 -o $EXP_MODELS_DIR \
 -d $CELL_CLONE \
+--transition-prob $TRANSITION_PROB \
 -c 5
 checkPipe
 echo "----------------------------------------------------"
@@ -51,15 +54,18 @@ echo "----------------------------------------------------"
 echo "refinement round 2"
 echo "----------------------------------------------------"
 msvtools refine \
+-D $MODELS_DIR \
 -r $EXP_MODELS_DIR/msvtools.refine.probes.$CELL_CLONE.bed.bgz \
 -a $CORE_PRJT_DIR \
 -p $CORE_PRJT \
 -F $ARRAY_FORMAT \
 -N $NAME_COLUMN \
+-A $ARRAY_TYPE \
 -s $SAMPLES \
 -C $CHROMS \
 -o $EXP_MODELS_DIR \
 -d $CELL_CLONE"_Round2" \
+--transition-prob $TRANSITION_PROB \
 -c 5
 checkPipe
 echo "----------------------------------------------------"
@@ -67,24 +73,26 @@ echo
 
 echo "done"
 
-#refine      refine the copy number/zygosity model using a set of array samples
-#
-#Model Options
-#    -D,--model-dir <str>     directory containing training model files
-#    -d,--model-name <str>    **REQUIRED** name for the copy number model (e.g. a cell line)
-#    -t,--train-name <str>    name of the model used to train this analysis [model-name]
-#    -r,--refine-file <str>   full path to 'refine.probes' file used to train this analysis
-#
-#Array Options
-#    -a,--array-dir <str>     **REQUIRED** directory containing array files
-#    -F,--array-format <str>  array format, i.e. vendor (Illumina) [Illumina]
-#    -p,--project <str>       **REQUIRED** project, name, exclusive of dates, e.g. Prjt_273
-#    -N,--name-column <str>   name of column to use as sample names [Illumina=>DNA_ID]
-#    -s,--samples <chr>       **REQUIRED** comma-delimited list of samples to use from project
-#
-#Output Options
-#    -C,--chromosomes <str>   **REQUIRED** comma-delimited list of all chromosomes to be analyzed
-#    -o,--output-dir <str>    **REQUIRED** output directory where files will be placed (must exist)
-#    -c,--max-copy-number <int>maximum copy number allowed in the HMM [4]
-#    -T,--tmp-dir <str>       temporary directory (must exist) [/tmp]
-#    -m,--max-mem <int>       maximum RAM bytes to use when sorting [1000000000]
+# refine      refine the copy number/zygosity model using a set of array samples
+
+# Model Options
+#     -D,--model-dir <str>     directory containing training model files
+#     -d,--model-name <str>    **REQUIRED** name for the copy number model (e.g. a cell line)
+#     -t,--train-name <str>    name of the model used to train this analysis [model-name]
+#     -r,--refine-file <str>   full path to 'refine.probes' file used to train this analysis
+
+# Array Options
+#     -a,--array-dir <str>     **REQUIRED** directory containing array files
+#     -F,--array-format <str>  array format, i.e. vendor (Illumina) [Illumina]
+#     -p,--project <str>       **REQUIRED** project, name, exclusive of dates, e.g. Prjt_273
+#     -N,--name-column <str>   name of column to use as sample names [Illumina=>DNA_ID]
+#     -A,--array-type <str>    **REQUIRED** text descriptor of the array probe set
+#     -s,--samples <chr>       **REQUIRED** comma-delimited list of samples to use from project
+
+# Output Options
+#     -C,--chromosomes <str>   **REQUIRED** comma-delimited list of all chromosomes to be analyzed
+#     -o,--output-dir <str>    **REQUIRED** output directory where files will be placed (must exist)
+#     -c,--max-copy-number <int>maximum copy number allowed in the HMM [4]
+#     -t,--transition-prob <dbl>HMM transition probability [1e-4]
+#     -T,--tmp-dir <str>       temporary directory (must exist) [/tmp]
+#     -m,--max-mem <int>       maximum RAM bytes to use when sorting [1000000000]

@@ -1,7 +1,6 @@
-
 # step through CN states to progressively collect
 # the zygosity distributions present in array data,
-# guided by trained and/or refined CN
+# guided by modeled CN for the subject clone's baseline/reference genome
 
 begSD <- 0.05
 minSD <- 0.001
@@ -12,9 +11,9 @@ fit_zygosity <- function(CN, type, formula, start, lower, upper){
 
     # set the data based on requested CN
     if(CN == 1) {
-        dd <- d[dlrr & d$ZYG>=extreme_zyg, 'zyg_bin'] # dlrr subsumes usability filter
+        dd <- d[arrayFittable & ZYG>=extreme_zyg]$zyg_bin
     } else {
-        dd <- d[dlrr & d$ZYG <extreme_zyg & d[[cn_col]]==CN, 'zyg_bin']
+        dd <- d[arrayFittable & ZYG <extreme_zyg & d[[cn_col]]==CN]$zyg_bin
     }
     dd <- dd[!is.na(dd)]
     
@@ -23,7 +22,7 @@ fit_zygosity <- function(CN, type, formula, start, lower, upper){
     Z <- zyg_bins
     N <- sum(h[[2]])
     n <- as.numeric(sapply(Z, function(ZYG) h[h[[1]]==ZYG,2]))
-    n[is.na(n)] <- 0     
+    n[is.na(n)] <- 0
     F <- n / N
 
     # initialize the histogram plot
@@ -41,8 +40,8 @@ fit_zygosity <- function(CN, type, formula, start, lower, upper){
     upper <- binPrm(upper, n_zyg_bins)
     fit <- withWarningsErrors(nls(
         formula,
-        data=data.frame(Z=Z,F=F),
-        algorithm="port",        
+        data=data.table(Z=Z,F=F),
+        algorithm="port",
         start=start,
         lower=lower,
         upper=upper,
@@ -71,13 +70,13 @@ fit_zygosity <- function(CN, type, formula, start, lower, upper){
     zyg_eps <- list()
     frc_zyg <- list() 
     for(i in 1:nDist){
-        L <- paste("L", i, sep="")
-        M <- paste("M", i, sep="")
-        S <- paste("S", i, sep="")
-        lines(x, c[[L]] * dnorm(Z, c[[M]], c[[S]]), col="blue", lwd=1)
+        L_ <- paste("L", i, sep="")
+        M_ <- paste("M", i, sep="")
+        S_ <- paste("S", i, sep="")
+        lines(x, c[[L_]] * dnorm(Z, c[[M_]], c[[S_]]), col="blue", lwd=1)
         zyg_eps[[paste(CN, i, sep=":")]] <-
-            data.frame( bin=Z, prob=normalizeEPs(sapply(Z, function(bin) {
-                diff( pnorm(bin+c(-zyg_inc, zyg_inc), c[[M]], c[[S]]) )
+            data.table( bin=Z, prob=normalizeEPs(sapply(Z, function(bin) {
+                diff( pnorm(bin+c(-zyg_inc, zyg_inc), c[[M_]], c[[S_]]) )
             }), bad_zyg_prob) )
             
     }
@@ -85,7 +84,7 @@ fit_zygosity <- function(CN, type, formula, start, lower, upper){
   
     # collect the actual EP distribution
     CN <- as.character(CN)
-    zyg_eps[[CN]] <- data.frame(bin=Z, prob=normalizeEPs(F, bad_zyg_prob))
+    zyg_eps[[CN]] <- data.table(bin=Z, prob=normalizeEPs(F, bad_zyg_prob))
     if(nDist==1) frc_zyg[[CN]] <- 1 # TODO: prefer actual if only one actual peak?? (regardless of no. of modeled peaks)
 
     # finish and return
@@ -95,8 +94,8 @@ fit_zygosity <- function(CN, type, formula, start, lower, upper){
     dat$isConv   <- fit$convInfo$isConv # double
     dat$error    <- FALSE
     dat$jpgFile  <- jpgFile
-    dat$zyg_eps  <- zyg_eps   
-    dat$frc_zyg  <- frc_zyg   
+    dat$zyg_eps  <- zyg_eps
+    dat$frc_zyg  <- frc_zyg
     dat
 }
 
@@ -109,22 +108,18 @@ z1 <- fit_zygosity(
     F ~ L1 * dnorm(Z, M1, S1),
     start=c(L1=1, M1=1.0,  S1=begSD), # keep the edge distrubutions close to symmetric about limits
     lower=c(L1=1, M1=0.95, S1=minSD),
-    upper=c(L1=1, M1=1.05, S1=maxSD)   
+    upper=c(L1=1, M1=1.05, S1=maxSD)
 )
 zyg_eps <- c(zyg_eps, z1$zyg_eps)
 frc_zyg <- c(frc_zyg, z1$frc_zyg)
-ot_flt <- ot$informative=='no' & ot$copy_number<=3 # includes mosaic probe states CN1.5_02 and CN2.5_03 ...
-ot[ot_flt,'zyg_mean']  <- z1$M1 # save all critical values
-ot[ot_flt,'zyg_stdev'] <- z1$S1
-if(modeling) { # ... so correct back the mosaic states to unused when modeling
-    ot[ot$copy_number==1.5,'zyg_mean']  <- -88
-    ot[ot$copy_number==2.5,'zyg_mean']  <- -88
-}
-# CN1 and uninormative always use actual distribution, forced during HMM assembly
+ot_flt <- ot$informative=='no'
+ot[ot_flt, zyg_mean  := z1$M1]
+ot[ot_flt, zyg_stdev := z1$S1]
+# CN1 and uninformative always use actual distribution, forced during HMM assembly
 
 # set ZYG parameters for CN2 and CN3 is coordinated manner
 # NB: input models are expected to have CN=2 with sufficient probes!
-# always ensure there are values set for CN-1,2,3
+# always ensure there are values set for CN=1,2,3
 message("fitting CN2 zygosity")
 inf_flt <- d$ZYG<extreme_zyg
 z2smp <- fit_zygosity(
@@ -135,7 +130,8 @@ z2smp <- fit_zygosity(
     lower=c(L1=1, M1=0.49, S1=minSD),
     upper=c(L1=1, M1=0.54, S1=maxSD)
 )
-if(isSuff(3, inf_flt)){
+isSuff3 <- isSuff(3, inf_flt)
+if(isSuff3){
     z2cmp <- fit_zygosity(
         2,
         'complex',
@@ -194,23 +190,22 @@ if(isSuff(3, inf_flt)){
     modeled <- sapply(zyg_bins, function(bin) {
         diff( pnorm(bin+c(-zyg_inc, zyg_inc), z3$M2*n_zyg_bins, z3$S2*n_zyg_bins) )
     })
-    zyg_eps[["3"]] <- data.frame(bin=zyg_bins, prob=normalizeEPs(modeled, bad_zyg_prob))
+    zyg_eps[["3"]] <- data.table(bin=zyg_bins, prob=normalizeEPs(modeled, bad_zyg_prob))
     zyg_eps[["3:2"]] <- zyg_eps[["3"]]
     plotModeled(3, 'ZYG', zyg_bins, n_zyg_bins, modeled, "Zygosity", zyg_lim)   
 }
 PS <- "CN2_11"
 ot_flt <- ot$probe_state==PS
-ot[ot_flt,'zyg_mean']  <- z2$M1
-ot[ot_flt,'zyg_stdev'] <- z2$S1
+ot[ot_flt, zyg_mean  := z2$M1]
+ot[ot_flt, zyg_stdev := z2$S1]
 zyg_eps[[PS]] <- zyg_eps[["2:1"]] # probe and allelic states synonymous when informative
 PS <- "CN3_12"
 ot_flt <- ot$probe_state==PS
-ot[ot_flt,'zyg_mean']  <- z3$M2
-ot[ot_flt,'zyg_stdev'] <- z3$S2
+ot[ot_flt, zyg_mean  := z3$M2]
+ot[ot_flt, zyg_stdev := z3$S2]
 zyg_eps[[PS]] <- zyg_eps[["3:2"]]
 
-# set ZYG parameters for CN4
-# only set values for CN 4 and 5 if they exist in input model
+# set ZYG parameters for CN4 if they exist in input model OR if they can be extrapolated from CN3
 if(isSuff(4, inf_flt)){
     message("fitting CN4 zygosity")
     z4smp <- fit_zygosity(
@@ -241,21 +236,50 @@ if(isSuff(4, inf_flt)){
     )
     z4 <- compareFit(z4smp, z4cmp, list(M3='M2', S3='S2')) 
     ot_flt <- ot$informative=='no' & ot$copy_number==4
-    ot[ot_flt,'zyg_mean']  <- z1$M1 # save all critical values
-    ot[ot_flt,'zyg_stdev'] <- z1$S1
+    ot[ot_flt, zyg_mean  := z1$M1]
+    ot[ot_flt, zyg_stdev := z1$S1]
     PS <- "CN4_22"
-    ot_flt <- ot$probe_state==PS    
-    ot[ot_flt,'zyg_mean']  <- z4$M1
-    ot[ot_flt,'zyg_stdev'] <- z4$S1
+    ot_flt <- ot$probe_state==PS
+    ot[ot_flt, zyg_mean  := z4$M1]
+    ot[ot_flt, zyg_stdev := z4$S1]
     zyg_eps[[PS]] <- zyg_eps[["4:1"]]
     PS <- "CN4_13"
     ot_flt <- ot$probe_state==PS  
-    ot[ot_flt,'zyg_mean']  <- z4$M3
-    ot[ot_flt,'zyg_stdev'] <- z4$S3
+    ot[ot_flt, zyg_mean  := z4$M3]
+    ot[ot_flt, zyg_stdev := z4$S3]
     zyg_eps[[PS]] <- if(z4$type=='complex') { zyg_eps[["4:3"]] } else { z4smp$zyg_eps[["4:2"]] }
+} else if(isSuff3){
+    z3 <- z3smp
+    zyg_eps <- c(zyg_eps, z3$zyg_eps)
+    frc_zyg <- c(frc_zyg, z3$frc_zyg)
+    message(paste("  ", 'simple', ifelse(z3$isConv, 'convergent', 'NOT convergent')))
+    message("projecting CN4 zygosity")
+    tgt <- if(exists('baf_mom')) {
+        ifelse(is.na(baf_mom['CN4_13']), 0.72, baf_mom['CN4_13'])
+    } else {
+        0.72 # empirically determined
+    }
+    z4 <- list(L1=1, M1=tgt, S1=z3$S1, isProjected = TRUE)
+    modeled <- sapply(zyg_bins, function(bin) {
+        diff( pnorm(bin+c(-zyg_inc, zyg_inc), z4$M1*n_zyg_bins, z4$S1*n_zyg_bins) )
+    })
+    zyg_eps[["4"]] <- data.table(bin=zyg_bins, prob=normalizeEPs(modeled, bad_zyg_prob))
+    zyg_eps[["4:1"]] <- zyg_eps[["4"]]
+    plotModeled(4, 'ZYG', zyg_bins, n_zyg_bins, modeled, "Zygosity", zyg_lim) 
+    PS <- "CN4_13"
+    ot_flt <- ot$probe_state==PS  
+    ot[ot_flt, zyg_mean  := z4$M1]
+    ot[ot_flt, zyg_stdev := z4$S1]
+    zyg_eps[[PS]] <- zyg_eps[["4:1"]]
+    z2 <- z2smp
+    PS <- "CN4_22"
+    ot_flt <- ot$probe_state==PS
+    ot[ot_flt, zyg_mean  := z2$M1]
+    ot[ot_flt, zyg_stdev := z2$S1]
+    zyg_eps[[PS]] <- zyg_eps[["CN2_11"]]
 }
 
-# set ZYG parameters for CN5
+# set ZYG parameters for CN5, but only if it exists in input model
 if(isSuff(5, inf_flt)){
     message("fitting CN5 zygosity")
     z5smp <- fit_zygosity(
@@ -291,51 +315,52 @@ if(isSuff(5, inf_flt)){
     z5 <- compareFit(z5smp, z5cmp, list(M4='M2', S4='S2',
                                         M2='M1', S2='S1'))
     ot_flt <- ot$informative=='no' & ot$copy_number==5
-    ot[ot_flt,'zyg_mean']  <- z1$M1 # save all critical values
-    ot[ot_flt,'zyg_stdev'] <- z1$S1
+    ot[ot_flt, zyg_mean  := z1$M1]
+    ot[ot_flt, zyg_stdev := z1$S1]
     PS <- "CN5_23"
     ot_flt <- ot$probe_state==PS  
-    ot[ot_flt,'zyg_mean']  <- z5$M2
-    ot[ot_flt,'zyg_stdev'] <- z5$S2
+    ot[ot_flt, zyg_mean  := z5$M2]
+    ot[ot_flt, zyg_stdev := z5$S2]
     zyg_eps[[PS]] <- if(z5$type=='complex') { zyg_eps[["5:2"]] } else { z5smp$zyg_eps[["5:1"]] }
     PS <- "CN5_14"
     ot_flt <- ot$probe_state==PS  
-    ot[ot_flt,'zyg_mean']  <- z5$M4
-    ot[ot_flt,'zyg_stdev'] <- z5$S4
+    ot[ot_flt, zyg_mean  := z5$M4]
+    ot[ot_flt, zyg_stdev := z5$S4]
     zyg_eps[[PS]] <- if(z5$type=='complex') { zyg_eps[["5:4"]] } else { z5smp$zyg_eps[["5:2"]] }
 }
 
 # set ZYG parameters for CN0; equally weight all outcomes since meaningless
 message("projecting CN0 zygosity")
-zyg_eps[["0"]] <- data.frame(
+zyg_eps[["0"]] <- data.table(
     bin=zyg_bins,
     prob=1/length(zyg_bins)
 )
 ot_flt <- ot$copy_number==0
-ot[ot_flt,'zyg_mean']  <- 0.5 
-ot[ot_flt,'zyg_stdev'] <- 0
+ot[ot_flt, zyg_mean  := 0.5]
+ot[ot_flt, zyg_stdev := 0]
 
 # when segmenting, create two mosaic states for CN1-2 and CN2-3
 # note that here, low is always CN2, i.e. ZYG=0.5
 message("projecting mosaic zygosities")
-if(!modeling){
-    zyg_eps[["1.5"]] <- data.frame(
+if(IS_SEGMENT_SAMPLE){
+    zyg_eps[["1.5"]] <- data.table(
         bin=zyg_bins,
         prob=project_mosaic(zyg_eps[['2']]$prob, zyg_eps[['1']]$prob, bad_zyg_prob) # will be much wider...
     )
     PS <- "CN1.5_11"
     ot_flt <- ot$probe_state==PS
-    ot[ot_flt,'zyg_mean']  <- 0.75
-    ot[ot_flt,'zyg_stdev'] <- 0
+    ot[ot_flt, zyg_mean  := 0.75]
+    ot[ot_flt, zyg_stdev := 0]
     zyg_eps[[PS]] <- zyg_eps[["1.5"]] 
-    zyg_eps[["2.5"]] <- data.frame(
+    
+    zyg_eps[["2.5"]] <- data.table(
         bin=zyg_bins,
         prob=project_mosaic(zyg_eps[['2']]$prob, zyg_eps[['3']]$prob, bad_zyg_prob) # ...than this
     )    
     PS <- "CN2.5_12"
     ot_flt <- ot$probe_state==PS
-    ot[ot_flt,'zyg_mean']  <- 0.585
-    ot[ot_flt,'zyg_stdev'] <- 0
+    ot[ot_flt, zyg_mean  := 0.585]
+    ot[ot_flt, zyg_stdev := 0]
     zyg_eps[[PS]] <- zyg_eps[["2.5"]]
 }
 

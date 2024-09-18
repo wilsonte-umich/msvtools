@@ -14,18 +14,13 @@ BIN_FILE    <- Sys.getenv('BIN_FILE')
 PLOT_DIR    <- Sys.getenv('PLOT_DIR')
 BIN_SIZE    <- as.numeric(Sys.getenv('BIN_SIZE'))
 
-# calculate/set parameters
-CNs       <- 1:MAX_CN # will only model these copy number states
-nsd       <- 3.5      # number of stdev used for plotting
+# set plot shared properties
+source(paste(LIB_DIR, "plot_common.R", sep="/"))
+width <- 5
 
-# set common image properties
-width     <- 5 #2.5
-height    <- 2.8
-units     <- 'in' # w and h in inches
-pointsize <- 8
-resol     <- 900 #dpi
-pch       <- "." #20
-cex       <- 1 #0.3
+# calculate/set parameters
+CNs <- 1:MAX_CN # will only model these copy number states
+nsd <- 3.5      # number of stdev used for plotting
 
 # load dependencies
 library('mixtools', lib.loc=R_LIB_DIR)
@@ -66,7 +61,7 @@ chroms <- sort(unique(d$CHROM)) # the input chromosomes
 nBin <- nrow(d)
 message(paste("    ", round(nBin / nunflt * 100, 2), "% of bins kept as usable"))
 
-# downsample further to speed up mixtools modeling
+# downsample further to speed up mixtools
 message('solving mixed copy number model')
 ns   <- min(nBin, 1e5)
 dd   <- d[sample(nrow(d), ns),]

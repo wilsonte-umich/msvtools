@@ -8,7 +8,7 @@ use warnings;
 #========================================================================
 # define variables
 #------------------------------------------------------------------------
-use vars qw($utility $command $libDir @args $error
+use vars qw($utility $command $libDir $rLibDir @args $error
             $slurp $genomeFasta
             %chroms %prbCol %svCol);
 our ($TRUE, $FALSE) = (1, undef);
@@ -26,8 +26,8 @@ sub filterArrayLine {
     $line =~ s/\r//g;
     my @f = split("\t", $line);
     $f[$$hdr{CHROM}] =~ m/^chr/ or $f[$$hdr{CHROM}] = "chr$f[$$hdr{CHROM}]";    
-    $chroms{$f[$$hdr{CHROM}]} or return;               
-    $f[$$hdr{POS}] =~ m/^\d+$/ or return;    
+    $chroms{$f[$$hdr{CHROM}]} or return;
+    $f[$$hdr{POS}] =~ m/^\d+$/ or return;
     if($f[$$hdr{LRR}] eq 'NaN' or $f[$$hdr{BAF}] eq 'NaN'){
         $f[$$hdr{LRR}] = $f[$$hdr{BAF}]= 'NA'; # keep failed probes in an R-friendly manner
     }
@@ -36,18 +36,21 @@ sub filterArrayLine {
 sub segmentArray {
     my ($name, $datFile, $plotsDir, $rData,
         $extZyg, $lrrLim, $badPrbFreq, $transProb, $preservation) = @_;
-    # make sure refine has segmentation defaults; segment provides user-exposed options
+
+    # segmentation defaults
     $extZyg       or $extZyg       = 0.85; 
     $lrrLim       or $lrrLim       = "-1.5,1.0";
     $badPrbFreq   or $badPrbFreq   = 1e-3;
-    $transProb    or $transProb    = 1e-4;
+    $transProb    or $transProb    = 1e-6;
     $preservation or $preservation = "0.99,0.95,0.9,0.8";
+
     # set parameters
     my $hmmFile = getOutFile('HMM',      $name, 'RData');
     my $prbFile = getOutFile('probes',   $name, 'bed.bgz');
     my $segFile = getOutFile('segments', $name, 'bed.bgz');
     my $svsFile = getOutFile('SVs',      $name, 'bed');
     $ENV{LIB_DIR}      = $libDir;
+    $ENV{R_LIB_DIR}    = $rLibDir;
     $ENV{MODEL_NAME}   = $name;
     $ENV{DATAFILE}     = $datFile;
     $ENV{PLOT_DIR}     = "$plotsDir/$name";
@@ -63,8 +66,8 @@ sub segmentArray {
     $ENV{BAD_PROBE_FREQ}  = $badPrbFreq;
     $ENV{PERSISTENCE}     = 1 - $transProb;
     $ENV{PRESERVATION}    = $preservation;
-    mkdir $plotsDir;      
-    mkdir $ENV{PLOT_DIR};     
+    mkdir $plotsDir;
+    mkdir $ENV{PLOT_DIR};
     system("Rscript $libDir/segment_HMM.R") and die "$error: segment_HMM.R failed\n";
     #unlink $datFile;
 

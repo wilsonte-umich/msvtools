@@ -8,12 +8,14 @@ use warnings;
 my $i = 0;
 our %prbCol = map { $_ => $i++ } (
     'CHROM','START','POS','PRB_NAME','IS_NA','STRAND',
-    'RC','LRR','BAF',           # refine=median, segment=rescaled and adjusted values used in HMM
+    'LRR','BAF',                # refine=median, segment=rescaled and adjusted values used in HMM
     'AS_IN','CN_IN','INF_IN',   # input state model
-    'LRR_RAW','BAF_RAW',        # refine=NA, segment=original values
-    'ot','os','hs',             # input and output indices for HMM
-    'AS_OUT','CN_OUT','INF_OUT',# output state model  
-    'CNC','LOH',                # SV call information
+    'LRR_RAW','BAF_RAW',        # original values prior to refine or segment actions
+    # 'ot','os',
+    'hs',                       # HMM indices
+    'AS_OUT','CN_OUT','INF_OUT',# output state model
+    'CNC','LOH',                # SV call metadata
+    # FRAC_GC                   # in genome model files
 );
 
 $i = 0;

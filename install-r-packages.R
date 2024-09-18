@@ -1,3 +1,7 @@
 
 .libPaths("lib/R-lib")
-install.packages("mixtools", repos = "https://cloud.r-project.org")
+install.packages(c(
+    "mixtools",
+    "data.table",
+    "R.utils"
+), repos = "https://cloud.r-project.org")

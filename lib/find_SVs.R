@@ -1,4 +1,3 @@
-
 # this script find runs of usable probes that predict structural variants
 # in one sample relative to an input model built on many samples
 
@@ -10,16 +9,16 @@ printSVs <- function(){
     header <- paste(SV_COL, collapse="\t")
     header <- paste("#", header, sep="") # comment the header for bgzip
     write(header, file=SVS_FILE)         # print it
-    pipe <- paste("awk 'BEGIN{OFS=\"\\t\"}{$2+=0;$3+=0;print $0}' >> ", SVS_FILE, sep="")    
-    nSVOut <- nrow(SVs)  
-    if(nSVOut>0){     
+    pipe <- paste("awk 'BEGIN{OFS=\"\\t\"}{$2+=0;$3+=0;print $0}' >> ", SVS_FILE, sep="")
+    nSVOut <- nrow(SVs)
+    if(nSVOut>0){
         SVs$SAMPLE <- MODEL_NAME # rename a couple of columns for header
         SVs$SV_ID  <- SVs$segN
         for(col in c('LRR_MEAN','LRR_SD','ZYG_MEAN','ZYG_SD')){
-            SVs[,col] <- round(SVs[,col],3) # pretty-round some numbers
+            SVs[[col]] <- round(SVs[[col]],3) # pretty-round some numbers
         }    
-        write.table(                         # then append the data rows
-            SVs[,SV_COL],
+        write.table(                     # then append the data rows
+            SVs[[SV_COL]],
             file=pipe(pipe),
             quote=FALSE,
             sep="\t",
@@ -31,6 +30,7 @@ printSVs <- function(){
     quit("no")
 }
 
+
 # set parameters
 MIN_PROBES_SV  <- 5   # require this many probes in all sub-runs (typically adjacent)
 MIN_INF_BITS   <- 7   # require this many bits of information, where a bit = 1 LRR OR l informative ZYG
@@ -41,53 +41,52 @@ N_FLANK_PROBES <- 10  # number of probes on either side of SV span used in futur
 # prepare row information for finding SV runs
 message("identifying anomalous probes")
 prbI <- 0 # a sequential numerical probe identifier for usable probes
-di   <- sapply(d$IS_NA==1, function(IS_NA){ if(IS_NA) NA else prbI <<- prbI + 1 })
-by   <- list(d$CHROM)
+di   <- sapply(d$masked, function(masked){ if(masked) NA else prbI <<- prbI + 1 })
+by <- list(d$CHROM)
 maxDI  <- max(di, na.rm=TRUE)                # get limits on probe identifiers
 minDIC <- aggregate(di, by, min, na.rm=TRUE) # here by chrom
 maxDIC <- aggregate(di, by, max, na.rm=TRUE)
 colnames(minDIC) <- c('CHROM','i')
 colnames(maxDIC) <- c('CHROM','i')
-ducp <- d[d$IS_NA==0,c('CHROM','POS')]       # coordinates of usable probes
+ducp <- d[masked == FALSE,.(CHROM,POS)]      # coordinates of usable probes
 cnc  <- d$CNC != 0                           # probes with a copy number change
 loh  <- astasms[d$AS_OUT] < astasms[d$AS_IN] # probes with LOH, even if copy number neutral
-anom <- d$IS_NA==0 & (cnc | loh)  # usable probes with any called deviation from the input model
-rm(cnc, loh)                      # TODO: could only report CNC and ignore LOH
+anom <- d$masked == FALSE & (cnc | loh)      # usable probes with any called deviation from the input model
+rm(cnc, loh) 
 
 # identify finest granularity runs of contiguous anomalous probes
 message("finding runs of anomalous probes")
-dd     <- d [anom,]
+dd     <- d[anom]
 ddi    <- di[anom] # row numbers from d for rows present in dd (NOT row numbers from dd)
 segN_  <- 0 # output run identifier
 prv    <- 1:(nrow(dd)-1) # set up probe adjacency comparisons
-nxt    <- 2: nrow(dd)    
-diff_chrom <- c(TRUE, dd[nxt,'CHROM'] != dd[prv,'CHROM'])
+nxt    <- 2: nrow(dd)
+diff_chrom <- c(TRUE, dd[nxt,CHROM] != dd[prv,CHROM])
 any_gap    <- c(TRUE, ddi[nxt] - ddi[prv] > 1)
-new_cn     <- c(TRUE, dd[nxt,'CN_OUT'] != dd[prv,'CN_OUT']) # will therefore fuse CN2_11 and CN2_02, e.g.
-dd$segN <- sapply( diff_chrom | any_gap | new_cn,
-    function(inc){ # break on new chromosome, or _any_ probe gap, or if CN changes
-        if(inc) segN_ <<- segN_ + 1
-        segN_
-    })
+new_cn     <- c(TRUE, dd[nxt,CN_OUT] != dd[prv,CN_OUT]) # will therefore fuse CN2_11 and CN2_02, e.g.
+dd$segN <- sapply( diff_chrom | any_gap | new_cn, function(inc){ # break on new chromosome, or _any_ probe gap, or if CN changes
+    if(inc) segN_ <<- segN_ + 1
+    segN_
+})
 rm(prv, nxt, diff_chrom, any_gap, new_cn)
 
 # filter away trivially short probe runs
 # also, filter away SVs claimed as CNN LOH where no probes are informative
 # such regions result from the vagaries of HMM assignment within a CN run
 message(paste("limiting output to runs with anomalous probe count >=", MIN_PROBES_SV))
-SVs <- data.frame(segN=sort(unique(dd$segN)))
-by  <- list(segN=dd$segN)
+SVs <- data.table(segN=sort(unique(dd$segN)))
+by <- list(segN=dd$segN)
 SVs$N_PROBES <- aggregate(1:nrow(dd), by, function(x){
     length(which( 
-        dd[x,'CNC'] != 0 | (dd[x,'INF_IN']  == 'yes' &
-                            dd[x,'INF_OUT'] == 'no')
+        dd[x,CNC] != 0 | (dd[x,INF_IN]  == 'yes' &
+                          dd[x,INF_OUT] == 'no')
     ))
 })[[2]]
 SVs$N_INF <- aggregate(1:nrow(dd), by, function(x){
-    length(which(dd[x,'INF_IN']  == 'yes'))
+    length(which(dd[x,INF_IN] == 'yes'))
 })[[2]]
 keep_SVs <- function(flt){ # function for filtering SVs
-    SVs <<- SVs[flt,]
+    SVs <<- SVs[flt]
     if(nrow(SVs)==0){ # abort if no SVs remain to avoid subsequent errors
         message("    no structural variants remain after filtering")
         printSVs()
@@ -95,11 +94,11 @@ keep_SVs <- function(flt){ # function for filtering SVs
         flt  <- dd$segN %in% SVs$segN
         dd  <<- dd [flt,]
         ddi <<- ddi[flt]
-        by  <<- list(segN=dd$segN)            
+        by  <<- list(segN=dd$segN)
     }
 }
 keep_SVs(SVs$N_PROBES >= MIN_PROBES_SV &           # give more weight to informative probes
-         SVs$N_PROBES + SVs$N_INF >= MIN_INF_BITS) # i.e. allow shorter runs if contains informative
+         SVs$N_PROBES + SVs$N_INF >= MIN_INF_BITS) # i.e., allow shorter runs if contains informative
 
 # calculate likelihoods for each SV run
 # measure of SV strength, degree of anomaly rel. to array
@@ -191,53 +190,3 @@ for(i in 1:nrow(SVs)){
 
 # commit the final output file, which will have some SVs
 printSVs()
-
-
-
-## collect parameters
-#LIB_DIR       <- '/home/wilsonte_lab/club_house/etc/garage/bin/wilson_ware/msvtools-0.0.1/lib'
-##MODEL_NAME    <- 'U2OS1-12APH'
-#MODEL_NAME    <- 'Scr1-1'
-#SAMPLES_DIR   <- '/home/wilsonte_lab/club_house/data/Glover/Irene/samples'
-#DATAFILE      <- paste(SAMPLES_DIR, '/', 'msvtools.segment.data.', MODEL_NAME, '.gz', sep="")
-#PLOT_DIR      <- paste(SAMPLES_DIR, '/plots/', MODEL_NAME, sep="")
-#PROBES_FILE   <- paste(SAMPLES_DIR, '/msvtools.segment.probes.', MODEL_NAME, '.bed.bgz', sep="")
-#SEGMENTS_FILE <- paste(SAMPLES_DIR, '/msvtools.segment.segments.', MODEL_NAME, '.bed.bgz', sep="")
-#SVS_FILE      <- paste(SAMPLES_DIR, '/msvtools.segment.SVs.', MODEL_NAME, '.bed', sep="")
-#TRAIN_RDATA   <- '__NULL__'
-#PLOT_PREFIX   <- paste(PLOT_DIR, MODEL_NAME, sep="/")
-#
-## save data for later development
-#if(exists('saveRData')){
-#    remove('saveRData')
-#    RD_FILE <- paste(PROBES_FILE, "RData", sep=".")
-#    save.image(file=RD_FILE)
-#    quit("no") 
-#    
-## load data when required/requested
-#} else if(!exists('d') | exists('forceLoad')){
-#    RD_FILE <- paste(PROBES_FILE, '.RData', sep="")    
-#    message(paste("loading data:", MODEL_NAME))
-#    load(file=RD_FILE)
-#    remove('saveRData')
-#}
-
-
-#logL <- function(ddi, AS_col){
-#    sum( log( sapply(ddi, function(i) dd[i,which(colnames(dd)==dd[i,AS_col])] ) ) )
-#}
-
-## calculate probabilities for each SV run 
-#message("calculating SV probabilities")
-#lr.test <- function(i, nll_col, alt_col){ # https://cran.r-project.org/web/packages/extRemes
-#    round(log(pchisq(2 * (SVs[i,alt_col] - SVs[i,nll_col]),
-#                     df=SVs[i,'N_PROBES'],
-#                     lower.tail=FALSE)), 3)  
-#}
-#SVs[,c('SV_P','MDL_P')] <- t(sapply(1:nrow(SVs), function(i){
-#    c(lr.test(i, 'FWD_LL', 'SV_LL'),
-#      lr.test(i, 'FWD_LL', 'MDL_LL'))
-#}))
-##null = the model with fewer parameters = FORWARD
-##alt  = the model with more parameters, has the same or greater log-likelihood = SV PATH
-##df   = n probes

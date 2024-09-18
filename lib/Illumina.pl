@@ -110,6 +110,25 @@ sub indexIllumina{
     }
     closeHandles($inH);
 }
+sub parseIlluminaProbes{
+    my ($sub) = @_;
+    print STDERR "$utility index: parsing Illumina prototype array\n";
+    my $reportDir = "$inputDir/Reports/FinalReports_StandardFormat";
+    my @files = glob("$reportDir/*FinalReport*txt");
+    @files or die "no file found: $reportDir\n";
+    print STDERR  $files[0], "\n";
+    my ($inH, $line) = openIlluminaReport($files[0], '\[Data\]');
+    $line = <$inH>;
+    my $i = 0;
+    my %hdr = map { $_ => $i++ } split("\t", $line);
+    foreach my $key(keys %colNames){
+        $hdr{$key} = $hdr{$colNames{$key}};
+    }
+    while (my $line = <$inH>){
+        filterArrayLine($line, \%hdr, $sub);
+    }
+    closeHandles($inH);
+}
 #-------------------------------------------------------------------------------
 
 
